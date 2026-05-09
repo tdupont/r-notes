@@ -1,0 +1,47 @@
+{
+  "index.qmd": {
+    "index.html": "4734e2dd"
+  },
+  "01-r-basics.qmd": {
+    "01-r-basics.html": "2dd2a5be"
+  },
+  "02-rmarkdown.qmd": {
+    "02-rmarkdown.html": "2d063cf7"
+  },
+  "03-data-import.qmd": {
+    "03-data-import.html": "0cbd4592"
+  },
+  "04-dplyr-wrangling.qmd": {
+    "04-dplyr-wrangling.html": "f329aa0e"
+  },
+  "05-efficient-programming.qmd": {
+    "05-efficient-programming.html": "e3dcc76d"
+  },
+  "06-ggplot2.qmd": {
+    "06-ggplot2.html": "00ab9368"
+  },
+  "07-gtsummary.qmd": {
+    "07-gtsummary.html": "72bd9741"
+  },
+  "08-regression-glm.qmd": {
+    "08-regression-glm.html": "1c9b2636"
+  },
+  "09-survival-analysis.qmd": {
+    "09-survival-analysis.html": "e1712fff"
+  },
+  "10-contingency-tables.qmd": {
+    "10-contingency-tables.html": "c63f8973"
+  },
+  "11-bayesian-intro.qmd": {
+    "11-bayesian-intro.html": "826520a8"
+  },
+  "12-factor-analysis.qmd": {
+    "12-factor-analysis.html": "2549d6d7"
+  },
+  "13-machine-learning.qmd": {
+    "13-machine-learning.html": "535e0024"
+  },
+  "14-shiny.qmd": {
+    "14-shiny.html": "baaff3aa"
+  }
+}

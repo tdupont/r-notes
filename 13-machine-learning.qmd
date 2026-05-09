@@ -1,0 +1,248 @@
+# Machine Learning in R
+
+```{r}
+#| include: false
+library(tidyverse)
+```
+
+This chapter covers practical machine learning workflows in R, focusing on the tools most relevant for clinical and research applications.
+
+---
+
+## The `caret` package
+
+`caret` (Classification And REgression Training) provides a unified interface for training and evaluating hundreds of models. It handles cross-validation, hyperparameter tuning, and pre-processing consistently across methods.
+
+```{r}
+#| eval: false
+library(caret)
+
+# Split into training and test sets
+set.seed(42)
+train_idx <- createDataPartition(df$outcome, p = 0.8, list = FALSE)
+train_dat <- df[ train_idx, ]
+test_dat  <- df[-train_idx, ]
+
+# Define cross-validation scheme
+ctrl <- trainControl(
+  method    = "cv",
+  number    = 10,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary
+)
+
+# Train a model (e.g. random forest)
+model <- train(
+  outcome ~ .,
+  data      = train_dat,
+  method    = "rf",
+  trControl = ctrl,
+  metric    = "ROC"
+)
+
+print(model)
+varImp(model)   # variable importance
+
+# Predict on test set
+preds <- predict(model, newdata = test_dat)
+confusionMatrix(preds, test_dat$outcome)
+```
+
+---
+
+## Gradient boosting with XGBoost
+
+XGBoost is the go-to algorithm for structured tabular data. It builds an ensemble of decision trees sequentially, each correcting the errors of the previous one.
+
+### Cross-validation to find the optimal number of trees
+
+```{r}
+#| eval: false
+library(xgboost)
+
+cv <- xgb.cv(
+  data              = as.matrix(train_features),
+  label             = train_labels,
+  nrounds           = 200,
+  nfold             = 5,
+  objective         = "reg:squarederror",  # or "binary:logistic"
+  eta               = 0.1,     # learning rate
+  max_depth         = 6,
+  early_stopping_rounds = 10,
+  verbose           = 0
+)
+
+# Find optimal number of trees
+elog     <- cv$evaluation_log
+ntrees   <- elog$iter[which.min(elog$test_rmse_mean)]
+cat("Optimal trees:", ntrees)
+```
+
+### Training and prediction
+
+```{r}
+#| eval: false
+model_xgb <- xgboost(
+  data      = as.matrix(train_features),
+  label     = train_labels,
+  nrounds   = ntrees,
+  objective = "reg:squarederror",
+  eta       = 0.1,
+  max_depth = 6,
+  verbose   = 0
+)
+
+# Predict
+test_data$pred <- predict(model_xgb, as.matrix(test_features))
+
+# Evaluate (regression: RMSE)
+test_data |>
+  mutate(residuals = outcome - pred) |>
+  summarise(rmse = sqrt(mean(residuals^2)))
+```
+
+### Visualise predictions vs. actuals
+
+```{r}
+#| eval: false
+ggplot(test_data, aes(x = pred, y = outcome)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, color = "tomato") +
+  labs(x = "Predicted", y = "Observed")
+```
+
+---
+
+## Model evaluation
+
+### Classification metrics
+
+```{r}
+#| eval: false
+library(pROC)
+
+roc_obj <- roc(true_labels, predicted_probs)
+auc(roc_obj)
+plot(roc_obj)
+
+# Confusion matrix (caret)
+confusionMatrix(predicted_classes, true_classes)
+```
+
+### Regression metrics
+
+```{r}
+#| eval: false
+# RMSE
+sqrt(mean((y_pred - y_true)^2))
+
+# MAE
+mean(abs(y_pred - y_true))
+
+# R²
+1 - sum((y_true - y_pred)^2) / sum((y_true - mean(y_true))^2)
+```
+
+---
+
+## One-hot encoding
+
+Many ML algorithms require numeric inputs. Factor variables must be converted to binary dummy columns.
+
+```{r}
+#| eval: false
+library(caret)
+
+# Create dummy variables
+dummies    <- dummyVars(~ ., data = df)
+df_encoded <- predict(dummies, newdata = df) |> as.data.frame()
+```
+
+Manual implementation:
+
+```{r}
+#| eval: false
+# For a single factor column
+model.matrix(~ factor_col - 1, data = df)
+```
+
+---
+
+## K-means clustering
+
+```{r}
+#| eval: false
+set.seed(42)
+km_model <- kmeans(df_numeric, centers = 3, nstart = 25)
+
+# Cluster assignments
+km_model$cluster
+
+# Cluster centres
+km_model$centers
+
+# Add cluster labels back to data
+df$cluster <- factor(km_model$cluster)
+```
+
+### Choosing $k$
+
+```{r}
+#| eval: false
+# Elbow method: plot within-cluster sum of squares vs. k
+wcss <- sapply(1:10, function(k) kmeans(df_numeric, k, nstart = 25)$tot.withinss)
+plot(1:10, wcss, type = "b", xlab = "k", ylab = "Within-cluster SS")
+```
+
+---
+
+## Useful packages summary
+
+| Package | Purpose |
+|---|---|
+| `caret` | Unified ML interface, cross-validation |
+| `xgboost` | Gradient boosted trees |
+| `randomForest` | Random forests |
+| `glmnet` | Regularised regression (LASSO, ridge, elastic net) |
+| `pROC` | ROC curves and AUC |
+| `tidymodels` | Modern tidyverse-compatible ML framework |
+
+---
+
+## The `tidymodels` framework
+
+`tidymodels` is the tidyverse successor to `caret`. It separates preprocessing (recipes), model specification, and fitting into distinct, composable steps.
+
+```{r}
+#| eval: false
+library(tidymodels)
+
+# 1. Preprocessing recipe
+rec <- recipe(outcome ~ ., data = train_dat) |>
+  step_impute_median(all_numeric_predictors()) |>
+  step_normalize(all_numeric_predictors()) |>
+  step_dummy(all_nominal_predictors())
+
+# 2. Model specification
+lr_spec <- logistic_reg(penalty = tune(), mixture = 1) |>
+  set_engine("glmnet") |>
+  set_mode("classification")
+
+# 3. Workflow
+wf <- workflow() |>
+  add_recipe(rec) |>
+  add_model(lr_spec)
+
+# 4. Tune with cross-validation
+cv_folds <- vfold_cv(train_dat, v = 10)
+tune_res  <- tune_grid(wf, resamples = cv_folds, grid = 20)
+
+# 5. Finalise and fit
+best_params <- select_best(tune_res, metric = "roc_auc")
+final_fit   <- finalize_workflow(wf, best_params) |> fit(train_dat)
+
+# 6. Evaluate on test set
+final_fit |>
+  augment(test_dat) |>
+  roc_auc(outcome, .pred_Yes)
+```

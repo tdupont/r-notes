@@ -1,0 +1,275 @@
+# Efficient R Programming
+
+```{r}
+#| include: false
+library(microbenchmark)
+```
+
+Writing R that runs fast matters as soon as your datasets grow beyond a few thousand rows, or when you run simulations or bootstrap procedures. This chapter covers timing, memory, vectorisation, and parallelism.
+
+---
+
+## Timing code
+
+### `system.time()`
+
+Returns three numbers: `user` (CPU time for user code), `system` (CPU time for system calls), and `elapsed` (wall-clock time). For most purposes, `elapsed` is what you care about.
+
+```{r}
+colon_fn       <- function(n) 1:n
+seq_default    <- function(n) seq(n)
+seq_by         <- function(n) seq(1, n, by = 1)
+
+n <- 1e8
+system.time(colon_fn(n))
+system.time(seq_default(n))
+system.time(seq_by(n))
+```
+
+The colon operator is the fastest because it maps directly to a C primitive.
+
+### `microbenchmark` — more precise comparisons
+
+```{r}
+library(microbenchmark)
+
+n <- 1e6
+microbenchmark(
+  colon    = 1:n,
+  seq_def  = seq(n),
+  seq_by   = seq(1, n, by = 1),
+  times    = 20
+)
+```
+
+`microbenchmark` runs each expression many times and reports summary statistics (min, mean, median, max) in nanoseconds or microseconds.
+
+---
+
+## Memory and vector allocation
+
+Growing a vector inside a loop is one of the most common performance mistakes in R. Each iteration copies the entire vector to a new, larger block of memory.
+
+```{r}
+n <- 10000
+
+# BAD — grows on each iteration
+growing <- function(n) {
+  x <- NULL
+  for (i in seq_len(n)) x <- c(x, rnorm(1))
+  x
+}
+
+# GOOD — pre-allocate, then fill
+pre_allocate <- function(n) {
+  x <- numeric(n)
+  for (i in seq_len(n)) x[i] <- rnorm(1)
+  x
+}
+
+# BEST — use a vectorised function directly
+vectorised <- function(n) rnorm(n)
+
+microbenchmark(
+  growing     = growing(n),
+  pre_alloc   = pre_allocate(n),
+  vectorised  = vectorised(n),
+  times = 5
+)
+```
+
+---
+
+## Vectorisation
+
+R's built-in functions are implemented in C or Fortran and execute on entire vectors at once. Whenever you find yourself writing a loop over a vector, ask whether a vectorised function already exists.
+
+```{r}
+n <- 1e6
+
+# Non-vectorised: one call per element
+x <- numeric(n)
+for (i in seq_len(n)) x[i] <- rnorm(1)
+
+# Vectorised: one call for all elements
+x <- rnorm(n)
+```
+
+```{r}
+microbenchmark(
+  loop_version = {
+    x <- numeric(n)
+    for (i in seq_along(x)) x[i] <- rnorm(1)
+  },
+  vectorised = rnorm(n),
+  times = 3
+)
+```
+
+The speedup is typically 100–1000×.
+
+### `rowSums()` and `&&` vs `&`
+
+```{r}
+#| eval: false
+# rowSums() is faster than apply(mat, 1, sum)
+rowSums(mat)
+colSums(mat)
+rowMeans(mat)
+
+# && short-circuits (stops evaluating after the first FALSE)
+# & always evaluates both sides
+if (condition_1 && condition_2) { ... }   # use in if() statements
+df |> filter(a & b)                       # use & for vector operations
+```
+
+---
+
+## Matrices vs. data frames
+
+Matrices hold a single data type; data frames can hold multiple. Subsetting a matrix is substantially faster.
+
+```{r}
+#| eval: false
+n <- 1000
+mat <- matrix(rnorm(n * 10), ncol = 10)
+df  <- as.data.frame(mat)
+
+microbenchmark(mat[, 1], df[, 1])
+```
+
+When all your data is numeric (e.g. a feature matrix for modelling), convert to a matrix before running computations.
+
+---
+
+## Profiling with `profvis`
+
+`profvis` shows a flame graph of where time is spent in a block of code. Wrap any expression in `profvis({...})` to visualise it.
+
+```{r}
+#| eval: false
+library(profvis)
+library(ggplot2movies)
+
+profvis({
+  comedies <- movies[movies$Comedy == 1, ]
+  plot(comedies$year, comedies$rating)
+  model <- loess(rating ~ year, data = comedies)
+  j <- order(comedies$year)
+  lines(comedies$year[j], model$fitted[j], col = "red")
+})
+```
+
+Look for wide bars (slow functions) and unexpected calls.
+
+---
+
+## Parallel computing
+
+R is single-threaded by default. The `parallel` package lets you distribute independent tasks across multiple CPU cores.
+
+### When to parallelise
+
+Parallel computing helps when:
+
+- Tasks are **independent** (no iteration $i$ depends on $i-1$) — Monte Carlo simulations, bootstrap resampling, cross-validation folds.
+- Each task takes at least a few milliseconds (overhead makes it worthless for trivial tasks).
+
+### Basic pattern with `parApply`
+
+```{r}
+#| eval: false
+library(parallel)
+
+# How many cores are available?
+detectCores()
+
+# Create a cluster (leave one core free for the OS)
+cl <- makeCluster(detectCores() - 1)
+
+# parApply is a parallel drop-in for apply()
+result <- parApply(cl, matrix_data, 2, median)
+
+stopCluster(cl)
+```
+
+### `parSapply` for list/vector inputs
+
+```{r}
+#| eval: false
+library(parallel)
+
+# A single bootstrap resample
+bootstrap <- function(data) {
+  idx <- sample(nrow(data), replace = TRUE)
+  data[idx, ]
+}
+
+cl <- makeCluster(detectCores() - 1)
+
+# Export custom functions and data to each worker
+clusterExport(cl, c("bootstrap", "my_data"))
+
+# Run 1000 bootstrap samples in parallel
+results <- parSapply(cl, 1:1000, function(i) {
+  b <- bootstrap(my_data)
+  mean(b$outcome)
+})
+
+stopCluster(cl)
+```
+
+---
+
+## The `apply` family (single-core)
+
+The `apply` functions are cleaner alternatives to `for` loops when working with matrices or lists. They do not automatically speed things up — use them for readability.
+
+| Function | Input | Output |
+|---|---|---|
+| `apply(X, 1, FUN)` | Matrix — apply FUN to each row | Vector or list |
+| `apply(X, 2, FUN)` | Matrix — apply FUN to each column | Vector or list |
+| `sapply(X, FUN)` | List/vector | Simplified (vector or matrix) |
+| `lapply(X, FUN)` | List/vector | Always a list |
+| `vapply(X, FUN, type)` | List/vector | Typed output (safer than `sapply`) |
+
+```{r}
+#| eval: false
+mat <- matrix(1:12, nrow = 3)
+apply(mat, 1, sum)   # row sums
+apply(mat, 2, mean)  # column means
+
+sapply(1:5, function(x) x^2)  # c(1, 4, 9, 16, 25)
+```
+
+---
+
+## Error handling and reproducibility
+
+### `reprex` — reproducible examples
+
+When asking for help, always provide a minimal reproducible example. The `reprex` package formats it for GitHub or Stack Overflow automatically.
+
+```{r}
+#| eval: false
+y <- 1:4
+mean(y)
+reprex::reprex()   # copies a formatted snippet to the clipboard
+```
+
+### `tryCatch` — handle errors gracefully
+
+```{r}
+#| eval: false
+result <- tryCatch(
+  expr  = { log(-1) },
+  warning = function(w) {
+    message("Warning caught: ", conditionMessage(w))
+    NA_real_
+  },
+  error = function(e) {
+    message("Error caught: ", conditionMessage(e))
+    NA_real_
+  }
+)
+```

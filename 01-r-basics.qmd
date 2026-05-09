@@ -1,0 +1,283 @@
+# R Basics
+
+```{r}
+#| include: false
+library(dplyr)
+library(dslabs)
+data("gapminder")
+```
+
+## Core concepts
+
+### Useful utility functions
+
+A handful of functions you will reach for constantly when exploring any R session or dataset.
+
+```{r}
+#| eval: false
+
+# R version info
+version
+major <- version$major
+minor <- version$minor
+
+# Package version
+packageVersion('caret')
+
+# Print column names in a reusable format
+dput(colnames(data))
+```
+
+### Hardware benchmarking
+
+The `benchmarkme` package lets you check your machine's performance relative to other R users — useful when deciding whether to run heavy computations locally or on a cluster.
+
+```{r}
+#| eval: false
+library(benchmarkme)
+
+# Standard benchmark (arithmetic, matrix operations, etc.)
+res <- benchmark_std(runs = 3)
+plot(res)
+
+# RAM and CPU info
+get_ram()
+get_cpu()
+
+# I/O benchmark (time to read a 50MB file)
+res_io <- benchmark_io(runs = 1, size = 50)
+plot(res_io)
+```
+
+### Core data formats
+
+R has two main binary formats for storing objects:
+
+- `.csv` — plain text, portable, human-readable
+- `.rds` — R's native binary format; preserves object class exactly
+
+```{r}
+#| eval: false
+read.csv("data.csv")     # returns a data.frame
+readRDS("data.rds")      # returns whatever was saved
+```
+
+---
+
+## Vectors
+
+Vectors are the fundamental unit in R. Everything is built on them.
+
+```{r}
+#| eval: false
+# Inspect any object
+str(gapminder)
+class(gapminder)
+glimpse(gapminder)    # tidyverse equivalent
+
+# Dimensions
+dim(mpg)
+head(mpg)
+tail(mpg)
+
+# Access a function from a specific package
+dplyr::glimpse(gapminder)
+
+# Combine elements
+x <- c(1, 2, 3)
+
+# Vector arithmetic is element-wise
+c(1, 2, 3) * c(7, 6, 5)
+
+# Sequences
+seq(1, 5, by = 1)
+1:5
+```
+
+### Functions applied to vectors
+
+```{r}
+#| eval: false
+sort(x)       # sort ascending
+rev(x)        # reverse order
+unique(x)     # remove duplicates
+table(x)      # frequency table
+
+# Replicate
+rep("ABC", times = 3)
+```
+
+### Indexing
+
+R uses 1-based indexing. Be careful: `x[1]` returns the first element, not the second.
+
+```{r}
+#| eval: false
+# Named vector
+x <- c(e = 2.718, pi = 3.14, sqrt2 = 1.414)
+x[c("e", "pi")]
+x[c(1, 3)]
+
+# Matrix indexing
+mat <- matrix(1:6, nrow = 2)
+mat[1, ]     # first row
+mat[, 2]     # second column
+
+# List access
+my_list <- list(a = 1:3, b = "hello")
+my_list$a
+my_list[["a"]]
+```
+
+### Sorting and ordering
+
+```{r}
+#| eval: false
+library(dslabs)
+data("murders")
+
+sort(murders$total)          # returns sorted values
+order(murders$total)         # returns indices of sorted values
+rank(murders$total)          # returns rank of each element
+
+# Sort a data frame by a column
+murders[order(murders$total), ]
+```
+
+### Type coercion
+
+R will coerce types silently, which can cause subtle bugs. Always check your types.
+
+```{r}
+#| eval: false
+b <- c(1, "b", 3)
+class(b)        # "character" — 1 and 3 were coerced
+
+# Explicit coercion
+as.numeric(b)    # NAs introduced for non-numeric values
+as.character(42)
+as.factor(c("low", "medium", "high"))
+as.data.frame(mat)
+```
+
+### Factors and ordered variables
+
+Factors represent categorical variables. Ordered factors carry additional information about the direction of the levels.
+
+```{r}
+# Unordered factor (nominal)
+survey <- c("M", "F", "F", "M", "M")
+factor_survey <- factor(survey)
+levels(factor_survey)
+
+# Renaming levels — order must match the current order of levels
+levels(factor_survey) <- c("Female", "Male")
+
+# Ordered factor (ordinal)
+temp <- c("Low", "Medium", "High", "Low", "High")
+temp_fct <- factor(temp, levels = c("Low", "Medium", "High"), ordered = TRUE)
+temp_fct
+```
+
+---
+
+## Data frames
+
+### Creation and basic inspection
+
+```{r}
+#| eval: false
+df <- data.frame(
+  name  = c("Alice", "Bob", "Carol"),
+  age   = c(34, 28, 45),
+  score = c(88.5, 72.0, 91.3)
+)
+
+head(df)
+tail(df)
+str(df)
+summary(df)
+dim(df)
+names(df)         # column names
+```
+
+### Subsetting
+
+```{r}
+#| eval: false
+# Column access — all equivalent
+df$age
+df[["age"]]
+df[, "age"]
+
+# Row subsetting
+df[1, ]           # first row
+df[2:3, ]         # rows 2 and 3
+df[, 1:2]         # first two columns
+
+# Logical subsetting
+df[df$age > 30, ]
+```
+
+### Statistics
+
+```{r}
+#| eval: false
+table(df$name)                         # frequency table
+table(treatment_group, control_group)  # cross-tabulation
+```
+
+---
+
+## File system utilities
+
+```{r}
+#| eval: false
+getwd()                # current working directory
+setwd("/path/to/dir")  # change working directory
+list.files()           # files in current directory
+ls()                   # objects in current environment
+
+file.path("folder", "file.csv")   # portable path construction
+
+data()                  # list built-in datasets
+class(obj)              # type of object
+args(mean)              # arguments of a function
+installed.packages()    # list installed packages
+packageVersion("shiny") # version of a specific package
+```
+
+---
+
+## Writing functions
+
+```{r}
+get_top_names <- function(.year, .sex) {
+  # Note: avoid naming arguments the same as column names to prevent
+  # scoping conflicts inside dplyr pipelines.
+  babynames::babynames |>
+    dplyr::filter(year == .year, sex == .sex) |>
+    dplyr::slice_max(prop, n = 10) |>
+    dplyr::mutate(name = forcats::fct_inorder(name))
+}
+```
+
+---
+
+## Conditionals
+
+```{r}
+#| eval: false
+# Vectorized if-else (tidyverse)
+dplyr::if_else(condition, true_value, false_value)
+
+# Base R
+ifelse(x > 0, "positive", "non-positive")
+
+# case_when for multiple conditions
+dplyr::case_when(
+  x > 10  ~ "high",
+  x > 5   ~ "medium",
+  .default = "low"
+)
+```

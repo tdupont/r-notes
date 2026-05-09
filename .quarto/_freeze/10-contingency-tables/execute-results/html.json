@@ -1,0 +1,19 @@
+{
+  "hash": "5bfcdf68955ab2c11fea69ffc6fdec88",
+  "result": {
+    "engine": "knitr",
+    "markdown": "# Contingency Tables\n\n\n\nContingency tables summarise the joint distribution of two or more categorical variables. They are used to test independence and to estimate measures of association.\n\n---\n\n## Creating a contingency table\n\n### From individual data\n\n\n::: {.cell}\n\n```{.r .cell-code}\ntable(df$exposure, df$outcome)\n```\n:::\n\n\n### From pre-counted data\n\n\n::: {.cell}\n\n```{.r .cell-code}\n# Direct matrix input\nj0 <- c(6, 39)\nj7 <- c(27, 18)\n\nmat <- matrix(cbind(j0, j7), ncol = 2, byrow = FALSE)\ncolnames(mat) <- c(\"Day 0\", \"Day 7\")\nrownames(mat) <- c(\"Ratio < threshold\", \"Ratio ≥ threshold\")\n\nas.table(mat)\n```\n:::\n\n\n---\n\n## Chi-square test\n\n\n::: {.cell}\n\n```{.r .cell-code}\nchisq.test(mat)\n```\n:::\n\n\nFor small cell counts (expected < 5), use Fisher's exact test instead:\n\n\n::: {.cell}\n\n```{.r .cell-code}\nfisher.test(mat)\n```\n:::\n\n\n---\n\n## McNemar's test for paired data\n\nMcNemar's test is the appropriate test when the two groups are **paired** (e.g. before/after measurements in the same patient, or matched pairs).\n\n\n::: {.cell}\n\n```{.r .cell-code}\n# Sparse 2×2 table\ndata_sparse <- matrix(c(4, 2, 23, 16), ncol = 2, byrow = TRUE)\ncolnames(data_sparse) <- c(\"J7_below\", \"J7_above\")\nrownames(data_sparse) <- c(\"J0_below\", \"J0_above\")\n\nmcnemar.test(data_sparse, correct = FALSE)\n```\n:::\n\n\n### Odds ratio via `epibasix`\n\n\n::: {.cell}\n\n```{.r .cell-code}\nlibrary(epibasix)\n\n# Gives OR, confidence interval, and p-value\nmcNemar(data_sparse, alpha = 0.05, digits = 3)\n```\n:::\n\n\n---\n\n## Margin totals\n\n\n::: {.cell}\n\n```{.r .cell-code}\nmargin.table(mat, 1)   # row totals\nmargin.table(mat, 2)   # column totals\nprop.table(mat)        # proportions\nprop.table(mat, 1)     # row proportions\nprop.table(mat, 2)     # column proportions\n```\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {
+      "include-in-header": [
+        "<link href=\"site_libs/pagedtable-1.1/css/pagedtable.css\" rel=\"stylesheet\" />\n<script src=\"site_libs/pagedtable-1.1/js/pagedtable.js\"></script>\n"
+      ]
+    },
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

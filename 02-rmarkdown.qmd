@@ -1,0 +1,221 @@
+# R Markdown & Quarto
+
+R Markdown (`.Rmd`) and its successor Quarto (`.qmd`) let you weave together prose, code, and output into a single reproducible document. This chapter covers everything you need to author and customise these documents effectively.
+
+---
+
+## Document structure
+
+Every R Markdown / Quarto document has three parts:
+
+1. **YAML header** — metadata at the top, delimited by `---`
+2. **Text** — prose written in Markdown
+3. **Code chunks** — executable blocks surrounded by backticks
+
+### The YAML header
+
+```yaml
+---
+title: "My Analysis"
+author: "Thibault Dupont"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+    number_sections: true
+---
+```
+
+Key YAML options:
+
+| Option | Effect |
+|---|---|
+| `toc: true` | Adds a table of contents |
+| `toc_depth: 2` | TOC shows headers up to `##` only |
+| `toc_float` | TOC floats on the left side while scrolling |
+| `number_sections: true` | Automatically numbers sections |
+
+**Automatic dates:**
+
+```yaml
+date: "`r Sys.Date()`"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+date: "Last edited on: `r Sys.Date()`"
+```
+
+**Multiple output formats:**
+
+```yaml
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+```
+
+---
+
+## The setup chunk
+
+The first code chunk in a document is usually the setup chunk. It sets global options that apply to every subsequent chunk.
+
+```{r}
+#| label: setup
+#| include: false
+
+knitr::opts_chunk$set(
+  comment  = "#>",
+  fig.align = "center",
+  fig.retina = 2,
+  fig.width  = 8,
+  fig.height = 5,
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+---
+
+## Code chunks
+
+### Essential chunk options
+
+| Option | Effect |
+|---|---|
+| `echo = FALSE` | Hides the code, shows the output |
+| `eval = FALSE` | Shows the code but does not run it |
+| `include = FALSE` | Runs the code silently; no code or output shown |
+| `collapse = TRUE` | Merges code and output into a single block |
+| `message = FALSE` | Suppresses package loading messages |
+| `warning = FALSE` | Suppresses warnings |
+
+### Figure options
+
+```r
+#| fig.width: 8
+#| fig.height: 5
+#| fig.align: "center"
+#| fig.cap: "Distribution of life expectancy by continent"
+#| out.width: "70%"
+```
+
+These can also be set globally in the setup chunk.
+
+---
+
+## Text formatting
+
+### Basic Markdown
+
+```markdown
+# Heading 1
+## Heading 2
+### Heading 3
+
+**bold text**
+*italic text*
+`inline code`
+~~strikethrough~~
+
+- Bullet item
+- Another item
+
+1. First numbered item
+2. Second numbered item
+```
+
+### Links and images
+
+```markdown
+[Link text](https://www.example.com)
+![Alt text](path/to/image.png)
+```
+
+### Inline R code
+
+Embed a variable directly in text by opening a backtick, writing the letter `r` followed by a space, then any R expression, then a closing backtick. For example, writing `nrow(df)` as an inline expression will print the number of rows directly in your sentence: *The model included 248 patients.*
+
+---
+
+## Parameterised reports
+
+Parameters make it easy to re-run the same report for different subgroups or time periods without editing the code.
+
+**Define parameters in YAML:**
+
+```yaml
+params:
+  country: "France"
+  year: 2023
+  start_date: "2023-01-01"
+```
+
+**Use them in code:**
+
+```r
+params$country
+params$year
+```
+
+**Use them in text** by embedding inline R expressions in your prose — for example, `params$country` and `params$year` inserted inline will print the parameter values directly into the sentence when the document is rendered.
+
+---
+
+## Custom styling
+
+### Inline CSS
+
+Add a `<style>` block anywhere in the document to customise appearance.
+
+```html
+<style>
+body {
+  color: #2c3e50;
+  font-family: "Helvetica Neue", sans-serif;
+  background-color: #f8f9fa;
+}
+
+pre {
+  background-color: #f0f0f0;
+}
+
+#TOC {
+  color: #2980b9;
+  font-size: 14px;
+}
+</style>
+```
+
+### External CSS file
+
+Reference a stylesheet from the YAML header to keep the document clean:
+
+```yaml
+output:
+  html_document:
+    css: styles.css
+```
+
+---
+
+## Output types
+
+| Format | YAML key | Notes |
+|---|---|---|
+| HTML | `html_document` | Best for interactive viewing; supports floating TOC |
+| PDF | `pdf_document` | Requires a LaTeX installation (e.g. TinyTeX) |
+| Word | `word_document` | Use `reference_docx` to apply a template |
+| Notebook | `html_notebook` | Adds a preview button in RStudio |
+
+**Word template:**
+
+```yaml
+output:
+  word_document:
+    reference_docx: template.docx
+    toc: true
+```

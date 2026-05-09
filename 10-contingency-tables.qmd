@@ -1,0 +1,87 @@
+# Contingency Tables
+
+```{r}
+#| include: false
+library(tidyverse)
+```
+
+Contingency tables summarise the joint distribution of two or more categorical variables. They are used to test independence and to estimate measures of association.
+
+---
+
+## Creating a contingency table
+
+### From individual data
+
+```{r}
+#| eval: false
+table(df$exposure, df$outcome)
+```
+
+### From pre-counted data
+
+```{r}
+# Direct matrix input
+j0 <- c(6, 39)
+j7 <- c(27, 18)
+
+mat <- matrix(cbind(j0, j7), ncol = 2, byrow = FALSE)
+colnames(mat) <- c("Day 0", "Day 7")
+rownames(mat) <- c("Ratio < threshold", "Ratio ≥ threshold")
+
+as.table(mat)
+```
+
+---
+
+## Chi-square test
+
+```{r}
+#| eval: false
+chisq.test(mat)
+```
+
+For small cell counts (expected < 5), use Fisher's exact test instead:
+
+```{r}
+#| eval: false
+fisher.test(mat)
+```
+
+---
+
+## McNemar's test for paired data
+
+McNemar's test is the appropriate test when the two groups are **paired** (e.g. before/after measurements in the same patient, or matched pairs).
+
+```{r}
+# Sparse 2×2 table
+data_sparse <- matrix(c(4, 2, 23, 16), ncol = 2, byrow = TRUE)
+colnames(data_sparse) <- c("J7_below", "J7_above")
+rownames(data_sparse) <- c("J0_below", "J0_above")
+
+mcnemar.test(data_sparse, correct = FALSE)
+```
+
+### Odds ratio via `epibasix`
+
+```{r}
+#| eval: false
+library(epibasix)
+
+# Gives OR, confidence interval, and p-value
+mcNemar(data_sparse, alpha = 0.05, digits = 3)
+```
+
+---
+
+## Margin totals
+
+```{r}
+#| eval: false
+margin.table(mat, 1)   # row totals
+margin.table(mat, 2)   # column totals
+prop.table(mat)        # proportions
+prop.table(mat, 1)     # row proportions
+prop.table(mat, 2)     # column proportions
+```

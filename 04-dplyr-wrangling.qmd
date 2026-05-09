@@ -1,0 +1,443 @@
+# Data Wrangling with dplyr
+
+```{r}
+#| include: false
+#| eval: true
+library(tidyverse)
+library(gapminder)
+library(babynames)
+data("gapminder")
+```
+
+dplyr is the core tool for data manipulation in R. Its verbs are organised around what they operate on: **rows**, **columns**, **groups**, or **tables**.
+
+---
+
+## The pipe
+
+```{r}
+#| eval: false
+# Base R pipe (R ≥ 4.1)
+data |> filter(year == 2007) |> summarise(mean_life = mean(lifeExp))
+
+# Tidyverse pipe (magrittr) — equivalent
+data %>% filter(year == 2007) %>% summarise(mean_life = mean(lifeExp))
+```
+
+---
+
+## Row verbs
+
+### `filter()` — keep rows matching a condition
+
+```{r}
+#| eval: false
+# Single condition
+gapminder |> filter(continent == "Africa")
+
+# Multiple conditions (AND)
+gapminder |> filter(continent == "Africa", year == 2012, lifeExp >= 70)
+
+# OR
+gapminder |> filter(continent == "Africa" | continent == "Asia")
+
+# %in% for multiple values
+years    <- c(1990, 2000, 2007)
+countries <- c("Vietnam", "France")
+gapminder |> filter(year %in% years, country %in% countries)
+```
+
+### `arrange()` — reorder rows
+
+```{r}
+#| eval: false
+gapminder |> arrange(lifeExp)           # ascending
+gapminder |> arrange(desc(lifeExp))     # descending
+gapminder |> arrange(continent, desc(gdpPercap))  # multi-column
+```
+
+### `distinct()` — remove duplicate rows
+
+```{r}
+#| eval: false
+# Unique rows overall
+df |> distinct()
+
+# Unique combinations of specific columns
+df |> distinct(country, continent, .keep_all = TRUE)
+```
+
+### `slice_*()` — extract rows by position
+
+```{r}
+#| eval: false
+df |> slice_max(lifeExp, n = 5)     # top 5 rows by life expectancy
+df |> slice_min(gdpPercap, n = 3)   # bottom 3 rows by GDP
+df |> slice_head(n = 10)             # first 10 rows
+df |> slice_sample(n = 100)          # random 100 rows
+```
+
+---
+
+## Column verbs
+
+### `select()` — choose columns
+
+```{r}
+#| eval: false
+# By name
+df |> select(country, year, lifeExp)
+
+# By position
+df |> select(1:3)
+
+# Helper functions
+df |> select(starts_with("gdp"))
+df |> select(ends_with("_mm"))
+df |> select(contains("life"))
+df |> select(matches("\\.t\\."))      # regex
+
+# Everything except
+df |> select(-country, -year)
+df |> select(-(col1:col4))
+
+# Type-based selection
+df |> select(where(is.numeric))
+df |> select(where(is.character))
+```
+
+### `mutate()` — add or transform columns
+
+```{r}
+#| eval: false
+# New column at the end
+gapminder |> mutate(gdp_total = gdpPercap * pop)
+
+# Control placement
+gapminder |> mutate(gdp_total = gdpPercap * pop, .after = year)
+gapminder |> mutate(gdp_total = gdpPercap * pop, .before = 1)
+
+# Keep only used columns
+flights |>
+  mutate(
+    gain          = dep_delay - arr_delay,
+    gain_per_hour = gain / (air_time / 60),
+    .keep = "used"
+  )
+
+# case_when for conditional recoding
+df |> mutate(
+  age_group = case_when(
+    age < 18  ~ "Paediatric",
+    age < 65  ~ "Adult",
+    .default  = "Elderly"
+  )
+)
+
+# Rename a column via rename() inside a pipeline with a new name
+games |> mutate(
+  cat_label = case_when(
+    category == "avg_us_viewers"     ~ "Average US viewers",
+    category == "rating_household"   ~ "Household rating",
+    category == "ad_cost"            ~ "Ad cost (USD)",
+    .default                         = as.character(category)
+  )
+)
+```
+
+### `rename()` — rename columns
+
+```{r}
+#| eval: false
+df |> rename(new_name = old_name)
+df |> janitor::clean_names()   # snake_case all column names automatically
+```
+
+### `relocate()` — move columns
+
+```{r}
+#| eval: false
+df |> relocate(score, .before = age)
+df |> relocate(id, .after = last_col())
+```
+
+---
+
+## Grouped operations
+
+### `group_by()` + `summarise()`
+
+```{r}
+#| eval: true
+gapminder |>
+  filter(year == 2007) |>
+  group_by(continent) |>
+  summarise(
+    total_pop    = sum(pop),
+    median_life  = median(lifeExp),
+    mean_gdp     = mean(gdpPercap),
+    n_countries  = n()
+  )
+```
+
+```{r}
+#| eval: false
+# Multiple grouping variables
+gapminder |>
+  group_by(continent, year) |>
+  summarise(
+    median_gdp     = median(gdpPercap),
+    median_lifeExp = median(lifeExp),
+    .groups = "drop"
+  )
+```
+
+### Useful summary functions
+
+| Function | Description |
+|---|---|
+| `n()` | Count rows in group |
+| `n_distinct(x)` | Count unique values of `x` |
+| `mean(x, na.rm=TRUE)` | Mean |
+| `median(x, na.rm=TRUE)` | Median |
+| `sd(x, na.rm=TRUE)` | Standard deviation |
+| `first(x)`, `last(x)`, `nth(x, 3)` | Positional values |
+
+### `count()` — quick frequency tables
+
+```{r}
+#| eval: false
+df |> count(group)                    # equivalent to group_by() + summarise(n = n())
+df |> count(group, sort = TRUE)       # sorted descending
+df |> count(group, wt = population)   # weighted count
+```
+
+### `top_n()` within groups
+
+```{r}
+#| eval: false
+# Counties with highest total population in each metro category
+counties |>
+  group_by(state, metro) |>
+  summarise(total_pop = sum(population)) |>
+  top_n(1, total_pop) |>
+  ungroup() |>
+  count(metro)
+```
+
+### Gotcha: variable name conflicts in functions
+
+When writing functions that use dplyr verbs, avoid naming function arguments the same as column names. Use a `.` prefix convention:
+
+```{r}
+#| eval: false
+# BAD: filter(year == year) matches nothing
+get_top_names_broken <- function(year, sex) {
+  babynames |> filter(year == year, sex == sex)  # bug!
+}
+
+# GOOD: prefix function arguments with .
+get_top_names <- function(.year, .sex) {
+  babynames |> filter(year == .year, sex == .sex)
+}
+```
+
+---
+
+## Pivoting data
+
+Tidy data has one variable per column, one observation per row, one value per cell. `pivot_longer()` and `pivot_wider()` move data between wide and long formats.
+
+### `pivot_longer()` — wide → long
+
+```{r}
+#| eval: false
+# Weekly chart positions stored in columns wk1, wk2, ..., wk76
+billboard |>
+  pivot_longer(
+    cols       = starts_with("wk"),
+    names_to   = "week",
+    values_to  = "rank",
+    values_drop_na = TRUE
+  ) |>
+  mutate(week = parse_number(week))
+```
+
+```{r}
+#| eval: false
+# Multiple variables encoded in column names
+# e.g. columns like "dob_child1", "name_child1", "dob_child2", "name_child2"
+household |>
+  pivot_longer(
+    cols      = !family,
+    names_to  = c(".value", "child"),  # .value tells pivot to use the prefix as the new column name
+    names_sep = "_",
+    values_drop_na = TRUE
+  )
+```
+
+### `pivot_wider()` — long → wide
+
+```{r}
+#| eval: false
+cms_patient_experience |>
+  pivot_wider(
+    id_cols     = starts_with("org"),
+    names_from  = measure_cd,
+    values_from = prf_rate
+  )
+```
+
+---
+
+## Joins
+
+```{r}
+#| eval: false
+# Left join: keep all rows from the left table
+flights |>
+  left_join(airlines, by = "carrier") |>
+  rename(airline_name = name) |>
+  left_join(airports, by = c("dest" = "faa")) |>
+  rename(airport_name = name)
+
+# Common join types
+inner_join(x, y, by = "id")  # only matching rows in both
+left_join(x, y, by = "id")   # all rows from x
+right_join(x, y, by = "id")  # all rows from y
+full_join(x, y, by = "id")   # all rows from both
+anti_join(x, y, by = "id")   # rows in x not in y
+```
+
+---
+
+## Data cleaning helpers
+
+### Missing values
+
+```{r}
+#| eval: false
+# Detect
+is.na(df$age)
+sum(is.na(df))              # total NAs
+any(is.na(df))              # any NAs?
+colSums(is.na(df))          # NAs per column
+
+# Complete cases only
+df[complete.cases(df), ]
+na.omit(df)
+
+# Replace specific values with NA
+df$score[df$score == 999] <- NA
+```
+
+### Dates with `lubridate`
+
+```{r}
+#| eval: false
+library(lubridate)
+
+ymd("2024-03-15")
+ymd_hms("2024-03-15 08:30:00")
+dmy("15/03/2024")
+```
+
+### Strings with `stringr`
+
+All `stringr` functions start with `str_` and take a string vector as first argument.
+
+```{r}
+#| eval: false
+library(stringr)
+
+str_trim("  excess whitespace  ")     # trim leading/trailing spaces
+str_pad("123", width = 6, pad = "0") # "000123"
+str_detect(x, "pattern")             # logical: does the pattern appear?
+str_count(x, "a")                    # count occurrences
+str_subset(x, "ICU")                 # keep strings matching pattern
+str_replace(x, "old", "new")         # replace first match
+str_replace_all(x, "old", "new")     # replace all matches
+str_sub(x, 1, 4)                     # extract characters 1–4
+str_length(x)                        # number of characters
+
+# Splitting
+str_split(x, fixed(" - "), n = 2, simplify = TRUE)
+```
+
+### String concatenation
+
+```{r}
+#| eval: false
+# paste() default separator is a space; paste0() default is ""
+paste("Hello", "world", sep = " ")
+paste0("patient_", 1:3)           # "patient_1" "patient_2" "patient_3"
+
+# str_c() from stringr: propagates NA (better for data pipelines)
+str_c("Hello", NA)  # NA  (paste() would give "Hello NA")
+str_c(c("a", "b", "c"), collapse = ", ")  # "a, b, c"
+```
+
+### Number formatting
+
+```{r}
+#| eval: false
+format(3.14159, digits = 3)                # "3.14"
+format(1234567, big.mark = ",")            # "1,234,567"
+formatC(0.001234, format = "e", digits = 2) # "1.23e-03"
+formatC(3.14159, format = "f", digits = 2)  # "3.14"
+```
+
+---
+
+## Practical example: babynames
+
+```{r}
+#| eval: false
+library(babynames)
+
+# Trend for a single name
+babynames |>
+  filter(name == "Sophie") |>
+  ggplot(aes(x = year, y = n, color = sex)) +
+  geom_line()
+
+# Year-normalised proportions and change over time
+babynames |>
+  group_by(year) |>
+  mutate(year_total = sum(n)) |>
+  ungroup() |>
+  mutate(fraction = n / year_total) |>
+  group_by(name) |>
+  arrange(name, year) |>
+  mutate(ratio = fraction / lag(fraction)) |>     # year-on-year growth
+  filter(fraction >= 0.00001) |>
+  slice_max(ratio, n = 1)
+```
+
+---
+
+## Collapsing boolean columns into a single factor
+
+A common pattern in clinical data: you have several mutually exclusive binary columns (e.g. admission reason) and want a single factor column instead.
+
+```{r}
+#| eval: false
+tmp <- data.frame(
+  respiratory = sample(c(TRUE, FALSE), 40, replace = TRUE),
+  neurologic  = sample(c(TRUE, FALSE), 40, replace = TRUE),
+  shock       = sample(c(TRUE, FALSE), 40, replace = TRUE)
+)
+
+tmp$reason <- apply(tmp[1:3], 1, function(row) names(tmp)[which(row)])
+```
+
+---
+
+## Converting factors to numeric
+
+```{r}
+#| eval: false
+# Convert all factor columns to numeric
+is_factor <- sapply(df, is.factor)
+df[is_factor] <- lapply(df[is_factor], function(x) as.numeric(as.character(x)))
+```

@@ -1,0 +1,253 @@
+# Factor Analysis & Structural Equation Modelling
+
+```{r}
+#| include: false
+library(psych)
+library(lavaan)
+```
+
+Factor analysis is a set of techniques for discovering latent constructs (factors) that explain correlations among observed variables (items). It underpins the validation and scoring of psychometric scales, including instruments commonly used in clinical research such as the HADS.
+
+---
+
+## Key concepts
+
+| Concept | Definition |
+|---|---|
+| Latent variable | An unobserved construct inferred from observed items (e.g. "Anxiety") |
+| Factor loading | Correlation between an item and a factor |
+| Communality | Proportion of an item's variance explained by the factors |
+| EFA | **Exploratory** FA — no prior theory about which items load on which factors |
+| CFA | **Confirmatory** FA — tests a specific hypothesised factor structure |
+
+---
+
+## Exploratory Factor Analysis (EFA)
+
+### When to use EFA
+
+Use EFA when you do not have a strong prior theory about the factor structure, or when you are developing a new scale.
+
+### Running an EFA
+
+```{r}
+#| eval: false
+library(psych)
+
+# Single-factor EFA
+efa_1 <- fa(hads_data)
+efa_1
+efa_1$loadings
+
+# Multi-factor EFA
+efa_3 <- fa(hads_data, nfactors = 3)
+efa_3$loadings
+head(efa_3$scores)
+
+# Path diagram
+fa.diagram(efa_3, labels = colnames(hads_data))
+```
+
+### Descriptive statistics for items
+
+```{r}
+#| eval: false
+describe(hads_data)      # mean, SD, skew, kurtosis for each item
+error.bars(hads_data)    # error bar plot
+error.dots(hads_data)    # dot plot with error bars
+```
+
+### Determining the number of factors
+
+**Eigenvalue criterion** (Kaiser rule): retain factors with eigenvalue > 1.
+
+```{r}
+#| eval: false
+# Scree plot
+item_cor   <- cor(hads_data, use = "pairwise.complete.obs")
+eigen_vals <- eigen(item_cor)
+eigen_vals$values
+
+psych::scree(item_cor, factors = FALSE)
+```
+
+---
+
+## Reliability
+
+### Cronbach's alpha
+
+Measures internal consistency — the extent to which items in a scale measure the same construct. A commonly cited threshold is α > 0.80 for good reliability.
+
+```{r}
+#| eval: false
+alpha_result <- psych::alpha(hads_data)
+alpha_result$total$raw_alpha
+
+# Split-half reliability
+psych::splitHalf(hads_data)
+```
+
+### Correlation matrix
+
+```{r}
+#| eval: false
+# Base R
+lowerCor(hads_data)
+corr.test(hads_data, use = "pairwise.complete.obs", method = "pearson", adjust = "none")
+
+# Correlogram with ggcorrplot
+library(ggcorrplot)
+p_mat <- cor_pmat(hads_data, use = "pairwise.complete.obs")
+
+hads_data |>
+  cor(use = "pairwise.complete.obs") |>
+  ggcorrplot(
+    hc.order    = TRUE,
+    type        = "upper",
+    lab         = TRUE,
+    p.mat       = p_mat,
+    sig.level   = 0.01,
+    insig       = "blank",
+    colors      = c("tomato2", "white", "springgreen3")
+  )
+```
+
+---
+
+## Splitting data for EFA/CFA
+
+Best practice: run EFA on half the data, CFA on the other half.
+
+```{r}
+#| eval: false
+set.seed(42)
+N       <- nrow(scale_data)
+idx_efa <- sample(seq_len(N), floor(0.5 * N))
+idx_cfa <- setdiff(seq_len(N), idx_efa)
+
+data_efa <- scale_data[idx_efa, ]
+data_cfa <- scale_data[idx_cfa, ]
+```
+
+---
+
+## Confirmatory Factor Analysis (CFA)
+
+CFA tests a theoretically specified factor structure using the `lavaan` package.
+
+### Model specification
+
+```{r}
+#| eval: false
+library(lavaan)
+
+# Two-factor model (lavaan syntax)
+model_hads <- "
+  Depression =~ HADS_DEP_Q8 + HADS_DEP_Q9 + HADS_DEP_Q10 +
+                HADS_DEP_Q11 + HADS_DEP_Q12 + HADS_DEP_Q13 + HADS_DEP_Q14
+  Anxiety    =~ HADS_ANX_Q1 + HADS_ANX_Q2 + HADS_ANX_Q3 +
+                HADS_ANX_Q4 + HADS_ANX_Q5 + HADS_ANX_Q6 + HADS_ANX_Q7
+"
+
+fit <- cfa(model_hads, data = hads_data, std.lv = TRUE)
+summary(fit, fit.measures = TRUE, standardized = TRUE)
+```
+
+### Model fit indices
+
+| Index | Good fit |
+|---|---|
+| CFI (Comparative Fit Index) | > 0.90 |
+| TLI (Tucker–Lewis Index) | > 0.90 |
+| RMSEA | < 0.05 |
+| SRMR | < 0.08 |
+
+```{r}
+#| eval: false
+fitMeasures(fit, c("cfi", "tli", "rmsea", "srmr", "aic", "bic"))
+```
+
+### Comparing two models
+
+```{r}
+#| eval: false
+# Likelihood-ratio test (only valid for nested models on the same data)
+anova(fit_short, fit_full)
+
+# BIC comparison (lower = better)
+fitMeasures(fit_short, "bic")
+fitMeasures(fit_full, "bic")
+```
+
+### McDonald's omega
+
+Omega is a more accurate reliability estimate than Cronbach's alpha when factor loadings are unequal.
+
+```{r}
+#| eval: false
+omega_result <- psych::omega(hads_data, nfactors = 2)
+omega_result$omega.tot
+```
+
+---
+
+## Cross-validation of a CFA model
+
+```{r}
+#| eval: false
+library(cvTools)
+
+k    <- 5
+set.seed(123)
+folds <- cvFolds(nrow(data_cfa), K = k)
+
+cv_results <- data.frame(Fold = 1:k, CFI = NA, RMSEA = NA, SRMR = NA)
+
+for (i in seq_len(k)) {
+  test_idx  <- which(folds$which == i)
+  train_dat <- data_cfa[-test_idx, ]
+  fit_cv    <- cfa(model_hads, data = train_dat, std.lv = TRUE)
+  fm        <- fitMeasures(fit_cv, c("cfi", "rmsea", "srmr"))
+  cv_results[i, c("CFI", "RMSEA", "SRMR")] <- fm
+}
+
+colMeans(cv_results[, -1], na.rm = TRUE)
+```
+
+---
+
+## Finding optimal scale cutoffs
+
+When shortening a scale, you need to derive new cutoffs for the reduced score. The approach below finds the cutoff on the short scale that maximises Cohen's kappa agreement with the full-scale categories.
+
+```{r}
+#| eval: false
+library(irr)
+
+# Assume full-scale scores and categories are already computed
+# Find optimal binary cutoff for the shortened scale
+kappa_vals <- sapply(0:12, function(thresh) {
+  short_case <- short_scores >= thresh
+  if (length(unique(short_case)) == 2) {
+    kappa2(data.frame(full_case, short_case))$value
+  } else NA
+})
+
+best_cutoff <- which.max(kappa_vals) - 1   # adjust for 0-indexing
+cat("Best cutoff:", best_cutoff, "| Kappa:", max(kappa_vals, na.rm = TRUE))
+```
+
+### ROC-based cutoff selection
+
+```{r}
+#| eval: false
+library(pROC)
+
+roc_obj   <- roc(full_case, short_scores, direction = "<")
+auc(roc_obj)
+
+best_coords <- coords(roc_obj, x = "best", best.method = "youden",
+                      ret = c("threshold", "sensitivity", "specificity"))
+print(best_coords)
+```

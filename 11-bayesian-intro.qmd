@@ -1,0 +1,132 @@
+# Introduction to Bayesian Data Analysis
+
+Bayesian inference updates a **prior distribution** (what we believe before seeing data) with observed data to produce a **posterior distribution** (our updated beliefs).
+
+$$P(\theta | \text{data}) \propto P(\text{data} | \theta) \cdot P(\theta)$$
+
+---
+
+## Core vocabulary
+
+| Term | Definition |
+|---|---|
+| Prior | $P(\theta)$ — distribution representing beliefs before data |
+| Likelihood | $P(\text{data} \| \theta)$ — probability of the data given a parameter value |
+| Posterior | $P(\theta \| \text{data})$ — updated beliefs after seeing data |
+| Credible interval | Interval that contains the true parameter value with a given probability |
+
+---
+
+## Probability distributions in Bayesian analysis
+
+### Simulating from a binomial process
+
+```{r}
+# 100 Bernoulli trials with p = 0.42
+n_trials    <- 100
+prop_success <- 0.42
+
+# Method 1: using runif
+data <- as.numeric(runif(n_trials) < prop_success)
+sum(data)
+
+# Method 2: using rbinom
+rbinom(n = 1,   size = 100, prob = 0.42)   # total successes in 100 trials
+rbinom(n = 100, size = 1,   prob = 0.42)   # 100 individual Bernoulli draws
+```
+
+### The Beta distribution
+
+The Beta distribution is the natural prior for a probability parameter $p \in [0, 1]$.
+
+- **Beta(1, 1)** = uniform prior (all values of $p$ equally likely)
+- Increasing $\alpha$ pulls the distribution toward 1; increasing $\beta$ pulls it toward 0
+- Larger $\alpha + \beta$ → narrower distribution (more prior certainty)
+
+```{r}
+#| eval: false
+# Uninformative prior
+beta_uniform <- rbeta(1000, shape1 = 1, shape2 = 1)
+hist(beta_uniform, main = "Beta(1,1) - Uniform prior", xlab = "p")
+
+# Informative prior: believe click-through rate ~5%
+beta_informative <- rbeta(1000, shape1 = 5, shape2 = 95)
+hist(beta_informative, main = "Beta(5, 95) - Informative prior", xlab = "p")
+```
+
+---
+
+## A complete Bayesian workflow
+
+This example models the click-through rate of an advertisement.
+
+```{r}
+#| eval: false
+set.seed(42)
+n_draws       <- 100000
+n_ads_shown   <- 100
+observed_clicks <- 13
+
+# Step 1: Sample from the prior
+proportion_clicks <- rbeta(n_draws, shape1 = 5, shape2 = 95)
+
+# Step 2: Simulate outcomes under the prior
+n_visitors <- rbinom(n_draws, size = n_ads_shown, prob = proportion_clicks)
+
+prior <- data.frame(proportion_clicks, n_visitors)
+
+# Step 3: Condition on observed data (posterior ≈ those simulations matching observation)
+posterior <- prior[prior$n_visitors == observed_clicks, ]
+
+# Step 4: Summarise the posterior
+cat("Posterior median:", median(posterior$proportion_clicks), "\n")
+cat("95% credible interval:", quantile(posterior$proportion_clicks, c(0.025, 0.975)), "\n")
+cat("P(rate > 0.10):", mean(posterior$proportion_clicks > 0.10), "\n")
+```
+
+```{r}
+#| eval: false
+# Visualise prior vs posterior
+par(mfrow = c(2, 1))
+hist(prior$proportion_clicks,     xlim = c(0, 0.25), main = "Prior", xlab = "p")
+hist(posterior$proportion_clicks, xlim = c(0, 0.25), main = "Posterior", xlab = "p")
+par(mfrow = c(1, 1))
+```
+
+---
+
+## Interpreting the posterior
+
+```{r}
+#| eval: false
+median(posterior)               # point estimate
+quantile(posterior, c(0.05, 0.95))   # 90% credible interval
+sum(posterior > 0.07) / length(posterior)  # P(p > 0.07)
+```
+
+### Credible interval vs. confidence interval
+
+- A **95% credible interval** says: "There is a 95% probability that the true parameter lies in this interval." This is the intuitive frequentist interpretation that people mistakenly apply to confidence intervals.
+- A **95% confidence interval** says: "If we repeated this experiment many times, 95% of the intervals constructed this way would contain the true value."
+
+---
+
+## Bayesian vs. frequentist decision-making
+
+| Question | Frequentist | Bayesian |
+|---|---|---|
+| "Is the effect real?" | p < 0.05 threshold | P(effect > 0) from posterior |
+| Uncertainty | Confidence interval | Credible interval |
+| Prior information | Not used | Formally incorporated |
+| Small samples | Problematic | Priors can stabilise |
+
+---
+
+## Recommended packages
+
+| Package | Purpose |
+|---|---|
+| `brms` | Bayesian regression using Stan |
+| `rstanarm` | Pre-compiled Stan models, drop-in replacement for `lm`/`glm` |
+| `bayesplot` | Visualisation of Bayesian model outputs |
+| `tidybayes` | Tidy tools for extracting posterior draws |

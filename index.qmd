@@ -1,0 +1,21 @@
+# Preface {.unnumbered}
+
+This book is a personal reference guide to R for clinical data science, written and maintained by Thibault Dupont. It consolidates notes from various courses, workshops, and hands-on projects — covering R fundamentals, data wrangling, visualization, statistics, and machine learning — with a focus on applications relevant to clinical research and intensive care medicine.
+
+The book is structured to be read linearly for a first pass, or used as a reference when you need to look up a specific technique. Each chapter includes explanatory text, annotated code, and practical examples.
+
+**How to use this book**
+
+- **New to R?** Start at Chapter 1 and read through Chapter 5.
+- **Refreshing data wrangling?** Jump to Chapter 4 (dplyr) and Chapter 6 (ggplot2).
+- **Working on a clinical study?** Chapters 7–10 cover the stats you will use most: descriptive tables, regression, survival analysis, and contingency tables.
+- **Building a dashboard or app?** Chapter 14 covers Shiny.
+
+**Technical setup**
+
+All code in this book runs with R ≥ 4.2. Package dependencies are loaded at the top of each chapter. The tidyverse meta-package covers most of what is needed.
+
+```{r}
+#| eval: false
+install.packages("tidyverse")
+```

@@ -1,0 +1,256 @@
+# Regression & Generalised Linear Models
+
+```{r}
+#| include: false
+library(tidyverse)
+library(broom)
+```
+
+Generalised linear models (GLMs) extend linear regression to outcomes that are not normally distributed. They share a common framework: a **distribution family**, a **link function**, and a **linear predictor**.
+
+---
+
+## Linear models
+
+```{r}
+#| eval: false
+model <- lm(lifeExp ~ gdpPercap + year, data = gapminder)
+summary(model)
+coef(model)
+confint(model)
+```
+
+A linear model is a special case of a GLM with a Gaussian family and identity link.
+
+---
+
+## Generalised linear models
+
+```{r}
+#| eval: false
+# General syntax
+glm(formula = y ~ x1 + x2, data = df, family = "binomial")
+
+# Families
+glm(y ~ x, data, family = "gaussian")    # same as lm()
+glm(y ~ x, data, family = "binomial")    # logistic regression
+glm(y ~ x, data, family = "poisson")     # Poisson regression
+
+# Remove the intercept (estimate a coefficient for each group)
+glm(y ~ group - 1, data, family = "binomial")
+```
+
+---
+
+## Poisson regression
+
+Poisson regression is appropriate for count outcomes, especially when counts are small and contain many zeros.
+
+- Coefficients are on the **log scale** → exponentiate to get the rate ratio.
+- Poisson coefficients are **multiplicative**, not additive.
+
+```{r}
+#| eval: false
+pois_model <- glm(n_events ~ dose + group, data = df, family = "poisson")
+
+# Exponentiate to get rate ratios
+exp(coef(pois_model))
+
+# Tidy output with confidence intervals
+broom::tidy(pois_model, exponentiate = TRUE, conf.int = TRUE)
+```
+
+### Plotting a Poisson fit
+
+```{r}
+#| eval: false
+ggplot(df, aes(x = dose, y = cell_count)) +
+  geom_jitter(width = 0.05, height = 0.05) +
+  geom_smooth(method = "glm", method.args = list(family = "poisson"))
+```
+
+---
+
+## Logistic regression
+
+Logistic regression models a binary outcome $Y \in \{0, 1\}$.
+
+**Model:**  
+$\text{logit}(p) = \log\left(\frac{p}{1-p}\right) = \beta_0 + \beta_1 x$
+
+**Inverse logit** (predicted probability):  
+$p = \frac{1}{1 + e^{-x}}$
+
+### Fitting
+
+Three equivalent data formats:
+
+```{r}
+#| eval: false
+# 1. Long format (one row per individual, 0/1 outcome)
+lr1 <- glm(died ~ age + sofa, data = patients_long, family = "binomial")
+
+# 2. Wide format (successes and failures as separate columns)
+lr2 <- glm(cbind(deaths, survivors) ~ age, data = patients_wide, family = "binomial")
+
+# 3. Proportion with weights
+lr3 <- glm(mortality_rate ~ age, data = patients_agg, family = "binomial",
+           weights = n_total)
+```
+
+### Link functions
+
+The default is **logit**. The **probit** link is an alternative based on the normal CDF.
+
+```{r}
+#| eval: false
+glm(y ~ x, family = binomial(link = "logit"))    # default
+glm(y ~ x, family = binomial(link = "probit"))
+```
+
+Logit is preferred for outlier-robustness (heavier tails); probit assumes normality.
+
+### Interpreting odds ratios
+
+```{r}
+#| eval: false
+# Extract and exponentiate coefficients
+coefs <- coef(model)
+exp(coefs)               # odds ratios
+
+# Using broom::tidy — cleaner
+broom::tidy(model, exponentiate = TRUE, conf.int = TRUE)
+```
+
+| OR | Interpretation |
+|---|---|
+| > 1 | Exposure increases the odds of the outcome |
+| = 1 | No effect |
+| < 1 | Exposure decreases the odds of the outcome |
+
+### Visualising logistic regression
+
+```{r}
+#| eval: false
+ggplot(df, aes(x = age, y = icu_death)) +
+  geom_jitter(width = 0, height = 0.05) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+  labs(y = "Probability of ICU death")
+```
+
+---
+
+## Multiple regression
+
+Rule of thumb: at least **10 events per predictor** to avoid overfitting.
+
+```{r}
+#| eval: false
+model <- glm(
+  died ~ age + sofa + mv + vasopressors + creatinine,
+  data   = icu_data,
+  family = "binomial"
+)
+
+summary(model)
+```
+
+### Model formula syntax
+
+| Formula | Effect |
+|---|---|
+| `y ~ x` | Intercept + slope for x |
+| `y ~ x - 1` | Slope for x, no intercept |
+| `y ~ x1 + x2` | Multiple predictors |
+| `y ~ x1 * x2` | Main effects + interaction |
+| `y ~ x1:x2` | Interaction only |
+| `y ~ .` | All columns as predictors |
+
+### Factor reference levels
+
+The **first level** of a factor is used as the reference by default (alphabetical order). Change it with `relevel()`:
+
+```{r}
+#| eval: false
+df$status <- relevel(factor(df$status), ref = "Stable")
+```
+
+### Design matrix
+
+```{r}
+#| eval: false
+model.matrix(~ size)             # reference intercept + contrasts
+model.matrix(~ size - 1)         # intercept for each level
+model.matrix(~ size + color - 1) # multiple factors, each with own intercept
+```
+
+---
+
+## Extracting model results
+
+```{r}
+#| eval: false
+coef(model)                     # coefficients
+confint(model)                  # confidence intervals
+predict(model, newdata = df)    # predictions (on link scale)
+predict(model, newdata = df, type = "response")  # predictions (probability scale)
+
+# Tidy output (broom package)
+broom::tidy(model)
+broom::glance(model)            # goodness-of-fit stats
+broom::augment(model)           # original data + fitted values + residuals
+```
+
+---
+
+## Model assumptions
+
+For logistic regression the key assumptions are:
+
+- **Linearity in the logit**: the log-odds is a linear function of continuous predictors.
+- **Independence of observations**: no clustering or repeated measures (without special handling).
+- **No severe multicollinearity**: correlated predictors inflate standard errors.
+- **Adequate sample size**: ≥ 10 events per predictor.
+
+Watch for **overdispersion** (more variance than the model expects) and **Simpson's paradox** (an important confounding variable missing from the model).
+
+---
+
+## Simulating binary data
+
+```{r}
+#| eval: false
+# Bernoulli: n = number of trials, size = 1 (single coin flip each)
+rbinom(n = 100, size = 1, prob = 0.3)
+
+# Binomial: n = 1, size = 100 (one draw of 100 coin flips)
+rbinom(n = 1, size = 100, prob = 0.3)
+
+# Convert logit-scale predictions to probability
+p <- plogis(0.5)   # = exp(0.5) / (1 + exp(0.5))
+rbinom(n = 10, size = 1, prob = p)
+```
+
+---
+
+## Correlations
+
+```{r}
+#| eval: false
+cor(df$var1, df$var2)
+cor(df, method = "spearman")        # rank correlation
+cor.test(df$var1, df$var2)          # with p-value and CI
+
+# Visualise correlation matrix
+library(ggcorrplot)
+df |>
+  select(where(is.numeric)) |>
+  cor(use = "pairwise.complete.obs") |>
+  ggcorrplot(
+    hc.order   = TRUE,
+    type       = "upper",
+    lab        = TRUE,
+    method     = "circle",
+    colors     = c("tomato2", "white", "springgreen3")
+  )
+```

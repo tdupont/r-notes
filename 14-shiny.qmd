@@ -1,0 +1,270 @@
+# Building Interactive Apps with Shiny
+
+```{r}
+#| include: false
+library(shiny)
+library(ggplot2)
+```
+
+Shiny lets you build interactive web applications directly from R. No HTML, CSS, or JavaScript knowledge is required to get started — though you can add them for advanced customisation.
+
+---
+
+## Anatomy of a Shiny app
+
+Every Shiny app has three components:
+
+1. **UI** (`ui`) — defines the layout and appearance (frontend)
+2. **Server** (`server`) — contains the computational logic (backend)
+3. **`shinyApp()`** — combines them into a runnable app
+
+```{r}
+#| eval: false
+library(shiny)
+
+ui <- fluidPage()  # minimal empty UI
+
+server <- function(input, output, session) {}  # empty server
+
+shinyApp(ui = ui, server = server)
+```
+
+Run the app with `runApp("path/to/app/")` or by clicking **Run App** in RStudio.
+
+---
+
+## The workflow: input → server → output
+
+```
+User interacts with input widget
+    ↓
+input$id changes value
+    ↓
+server recomputes output$id
+    ↓
+Output renders in the UI
+```
+
+- Inputs are **always defined in the UI** and accessed in the server as `input$inputId`.
+- Outputs are **rendered in the server** and displayed in the UI via `*Output()` functions.
+
+---
+
+## UI elements
+
+### Layout functions
+
+| Function | Purpose |
+|---|---|
+| `fluidPage()` | Fluid layout (adjusts to browser width) |
+| `fixedPage()` | Fixed-width layout |
+| `navbarPage()` | Page with navigation tabs |
+| `sidebarLayout()` | Two-column layout with sidebar + main area |
+| `sidebarPanel()` | Sidebar column |
+| `mainPanel()` | Main column |
+| `tabsetPanel()` + `tabPanel()` | Tabbed panels within a page |
+
+### Standard layout with sidebar
+
+```{r}
+#| eval: false
+ui <- fluidPage(
+  titlePanel("My Clinical Dashboard"),
+  sidebarLayout(
+    sidebarPanel(
+      textInput("name", "Patient name:"),
+      sliderInput("age", "Age:", min = 0, max = 120, value = 50),
+      selectInput("group", "Group:", choices = c("Control", "Treated"))
+    ),
+    mainPanel(
+      plotOutput("survival_plot"),
+      tableOutput("summary_table")
+    )
+  )
+)
+```
+
+### Input widgets
+
+| Widget | Function | Value type |
+|---|---|---|
+| Text field | `textInput()` | `character` |
+| Numeric field | `numericInput()` | `numeric` |
+| Slider | `sliderInput()` | `numeric` |
+| Dropdown | `selectInput()` | `character` |
+| Radio buttons | `radioButtons()` | `character` |
+| Checkbox | `checkboxInput()` | `logical` |
+| Multiple checkboxes | `checkboxGroupInput()` | `character vector` |
+| Date picker | `dateInput()` | `Date` |
+| Date range | `dateRangeInput()` | `Date[2]` (accessed via `[1]` and `[2]`) |
+| Action button | `actionButton()` | integer (click count) |
+
+```{r}
+#| eval: false
+# Slider with animation button
+sliderInput("year", "Year:", min = 2000, max = 2024, value = 2010, animate = TRUE)
+
+# Dropdown with grouped choices
+selectInput(
+  "species",
+  "Select species:",
+  choices = list(
+    Penguins = list("Adelie", "Chinstrap", "Gentoo"),
+    Others   = list("Emperor", "King")
+  )
+)
+
+# Text input with placeholder
+textInput("query", label = "", placeholder = "Search patient ID...")
+```
+
+### Output elements
+
+| Display | UI function | Server render function |
+|---|---|---|
+| Plot | `plotOutput()` | `renderPlot({ ... })` |
+| Table | `tableOutput()` | `renderTable({ ... })` |
+| Text | `textOutput()` | `renderText({ ... })` |
+| Verbatim text | `verbatimTextOutput()` | `renderPrint({ ... })` |
+| Data frame | `dataTableOutput()` | `renderDataTable({ ... })` |
+| UI element | `uiOutput()` | `renderUI({ ... })` |
+
+---
+
+## Server logic
+
+```{r}
+#| eval: false
+server <- function(input, output, session) {
+
+  # Render a plot that depends on the input
+  output$survival_plot <- renderPlot({
+    df_filtered <- patients |>
+      filter(group == input$group, age <= input$age)
+
+    ggplot(df_filtered, aes(x = time, y = survival)) +
+      geom_line() +
+      labs(title = paste("Group:", input$group))
+  })
+
+  # Render a summary table
+  output$summary_table <- renderTable({
+    patients |>
+      filter(group == input$group) |>
+      summarise(n = n(), median_los = median(los))
+  })
+
+}
+```
+
+---
+
+## Reactive programming
+
+Shiny uses **reactive expressions** to avoid unnecessary recomputation. A reactive expression caches its value and only re-runs when its inputs change.
+
+```{r}
+#| eval: false
+server <- function(input, output, session) {
+
+  # Reactive expression: filtered data (recomputes only when input$group changes)
+  filtered_data <- reactive({
+    patients |> filter(group == input$group)
+  })
+
+  # Multiple outputs can share the same reactive expression
+  output$plot  <- renderPlot({ ggplot(filtered_data(), ...) })
+  output$table <- renderTable({ filtered_data() })
+
+}
+```
+
+### `observeEvent()` — respond to button clicks
+
+```{r}
+#| eval: false
+observeEvent(input$run_analysis, {
+  # This block runs only when the button is clicked
+  output$result <- renderText(paste("Analysis run with n =", input$n))
+})
+```
+
+---
+
+## Running examples
+
+The `shiny` package comes with built-in example apps:
+
+```{r}
+#| eval: false
+runExample("01_hello")
+runExample("02_text")       # tables and data frames
+runExample("03_reactivity") # reactive expressions
+runExample("05_sliders")    # slider widgets
+runExample("06_tabsets")    # tabbed panels
+runExample("09_upload")     # file upload
+runExample("10_download")   # file download
+```
+
+---
+
+## Complete working example
+
+```{r}
+#| eval: false
+library(shiny)
+library(babynames)
+library(ggplot2)
+
+ui <- fluidPage(
+  titlePanel("Baby Name Explorer"),
+  sidebarLayout(
+    sidebarPanel(
+      textInput("name", "Enter a name:", value = "Emma")
+    ),
+    mainPanel(
+      plotOutput("trend", height = "400px")
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  output$trend <- renderPlot({
+    babynames |>
+      filter(name == input$name) |>
+      ggplot(aes(x = year, y = prop, color = sex)) +
+      geom_line(linewidth = 1) +
+      labs(
+        title = paste("Popularity of", input$name, "over time"),
+        x = "Year", y = "Proportion of births"
+      ) +
+      theme_minimal()
+  })
+}
+
+shinyApp(ui = ui, server = server)
+```
+
+---
+
+## Deployment
+
+| Platform | Command / method |
+|---|---|
+| Local (RStudio) | **Run App** button or `runApp()` |
+| shinyapps.io (cloud) | `rsconnect::deployApp()` |
+| Posit Connect | Deploy via IDE or `rsconnect` |
+| Docker | Use `rocker/shiny` base image |
+
+---
+
+## Useful packages
+
+| Package | Purpose |
+|---|---|
+| `shinydashboard` | Dashboard layouts with sidebar, header, boxes |
+| `bslib` | Modern Bootstrap themes and UI components |
+| `DT` | Interactive data tables (`renderDT`, `DTOutput`) |
+| `plotly` | Interactive ggplot-to-plotly conversion |
+| `shinyWidgets` | Additional input widgets |
+| `reactable` | Fast, interactive tables |

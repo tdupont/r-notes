@@ -1,0 +1,331 @@
+# Data Visualisation with ggplot2
+
+```{r}
+#| include: false
+#| eval: true
+library(ggplot2)
+library(dplyr)
+library(palmerpenguins)
+library(gapminder)
+library(ggthemes)
+data("gapminder")
+data("penguins")
+```
+
+ggplot2 uses a **layered grammar of graphics**: you build a plot by adding layers (geoms, scales, facets, themes) on top of a base `ggplot()` call. Extensions for specialised plot types are available at [exts.ggplot2.tidyverse.org](https://exts.ggplot2.tidyverse.org/gallery/).
+
+---
+
+## The basics
+
+### Anatomy of a ggplot call
+
+```{r}
+#| eval: false
+ggplot(
+  data    = penguins,              # the data frame
+  mapping = aes(x = flipper_length_mm, y = body_mass_g)  # global aesthetic mapping
+) +
+  geom_point(aes(color = species, shape = species)) +   # local aesthetic
+  geom_smooth(method = "lm") +
+  labs(
+    title    = "Body mass vs. flipper length",
+    subtitle = "Palmer Archipelago penguins",
+    x = "Flipper length (mm)",
+    y = "Body mass (g)",
+    caption  = "Data: palmerpenguins package"
+  ) +
+  ggthemes::scale_color_colorblind()
+```
+
+### Global vs. local aesthetics
+
+Aesthetics specified inside `ggplot(aes(...))` apply to **all** geoms. Aesthetics inside a specific `geom_*()` apply only to that layer.
+
+```{r}
+#| eval: true
+#| message: false
+# Global: both geom_point and geom_smooth share color = species
+penguins |>
+  ggplot(aes(x = flipper_length_mm, y = body_mass_g, colour = species)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+```
+
+---
+
+## Common geoms
+
+### Scatter plot — `geom_point()`
+
+```{r}
+#| eval: true
+gapminder |>
+  filter(year == 2007) |>
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = continent, size = pop)) +
+  geom_point(alpha = 0.7) +
+  scale_x_log10() +
+  labs(x = "GDP per capita (log scale)", y = "Life expectancy")
+```
+
+### Line plot — `geom_line()`
+
+```{r}
+#| eval: true
+#| message: false
+gapminder |>
+  group_by(year, continent) |>
+  summarise(median_gdp = median(gdpPercap), .groups = "drop") |>
+  ggplot(aes(x = year, y = median_gdp, color = continent)) +
+  geom_line() +
+  expand_limits(y = 0)
+```
+
+### Histogram — `geom_histogram()`
+
+Takes a single `x` aesthetic. Use `binwidth` to control bin width or `bins` to set the number of bins.
+
+```{r}
+#| eval: true
+gapminder |>
+  filter(year == 1952) |>
+  ggplot(aes(x = pop / 1e6)) +
+  geom_histogram(bins = 50) +
+  scale_x_log10() +
+  labs(x = "Population (millions, log scale)", y = "Count")
+```
+
+### Bar plot — `geom_col()` vs `geom_bar()`
+
+- `geom_bar()` counts rows automatically (useful when data has one row per observation).
+- `geom_col()` uses a `y` variable you supply (useful after summarising).
+
+```{r}
+#| eval: false
+# geom_col() with summarised data
+gapminder |>
+  filter(year == 1952) |>
+  group_by(continent) |>
+  summarise(median_gdp = median(gdpPercap)) |>
+  ggplot(aes(x = continent, y = median_gdp)) +
+  geom_col()
+
+# geom_bar() — reorder by frequency
+penguins |>
+  ggplot(aes(x = fct_infreq(species))) +
+  geom_bar()
+```
+
+### Box plot — `geom_boxplot()`
+
+```{r}
+#| eval: false
+penguins |>
+  ggplot(aes(x = species, y = bill_depth_mm)) +
+  geom_boxplot()
+```
+
+### Smooth lines — `geom_smooth()`
+
+```{r}
+#| eval: false
+ggplot(data, aes(x = dose, y = response)) +
+  geom_jitter(width = 0.05, height = 0.05) +
+  geom_smooth(method = "glm", method.args = list(family = "poisson"))
+```
+
+---
+
+## Aesthetics reference
+
+| Aesthetic | Controls |
+|---|---|
+| `color` / `colour` | Outline or line colour |
+| `fill` | Interior fill colour |
+| `size` | Point size or line width |
+| `shape` | Point shape (0–25) |
+| `alpha` | Transparency (0 = invisible, 1 = opaque) |
+| `linetype` | Line type (solid, dashed, dotted …) |
+
+---
+
+## Scales
+
+```{r}
+#| eval: false
+# Log-scale axes
+scale_x_log10()
+scale_y_log10()
+
+# Manual colour scale
+scale_color_manual(values = c("group1" = "#E41A1C", "group2" = "#377EB8"))
+
+# Colorblind-safe palette (ggthemes)
+ggthemes::scale_color_colorblind()
+
+# Axis limits without removing data (use with care)
+expand_limits(y = 0)
+
+# Discrete x-axis labels
+scale_x_discrete(labels = c("val1" = "Label 1", "val2" = "Label 2"))
+```
+
+---
+
+## Faceting
+
+`facet_wrap()` creates a grid of panels — one per level of a variable.
+
+```{r}
+#| eval: true
+gapminder |>
+  filter(year == 1952) |>
+  ggplot(aes(x = gdpPercap, y = lifeExp, color = continent, size = pop)) +
+  geom_point(alpha = 0.7) +
+  scale_x_log10() +
+  facet_wrap(~continent)
+```
+
+---
+
+## Labelling
+
+```{r}
+#| eval: false
+labs(
+  title    = "Main title",
+  subtitle = "Subtitle",
+  x        = "X-axis label",
+  y        = "Y-axis label",
+  color    = "Legend title",
+  caption  = "Data source: ..."
+)
+```
+
+---
+
+## Overlaying multiple filtered geoms
+
+When you want different subsets of the data on different layers, pass filtered data directly to each geom:
+
+```{r}
+#| eval: false
+ggplot(data) +
+  geom_line(
+    data = data |> filter(group == "A"),
+    aes(x = time, y = value), color = "steelblue"
+  ) +
+  geom_line(
+    data = data |> filter(group == "B"),
+    aes(x = time, y = value), color = "tomato"
+  )
+```
+
+---
+
+## Special characters in labels
+
+Use Unicode escape sequences when you need special characters in axis labels or titles:
+
+```{r}
+#| eval: false
+"m\u00B2"   # m²
+"\u03B2"    # β (beta)
+"\u2264"    # ≤
+"\u2265"    # ≥
+```
+
+---
+
+## Venn diagrams
+
+### `ggVennDiagram`
+
+```{r}
+#| eval: false
+library(ggVennDiagram)
+
+set.seed(42)
+gene_sets <- list(
+  Study_A = sample(paste0("gene", 1:1000), 300),
+  Study_B = sample(paste0("gene", 1:1000), 525),
+  Study_C = sample(paste0("gene", 1:1000), 440)
+)
+
+ggVennDiagram(gene_sets) +
+  scale_fill_gradient(low = "grey90", high = "tomato")
+```
+
+### `VennDiagram` (base-graphics approach)
+
+```{r}
+#| eval: false
+library(VennDiagram)
+
+# 3-set Venn from pre-counted values
+draw.triple.venn(
+  area1 = 500, area2 = 480, area3 = 420,
+  n12 = 200, n13 = 180, n23 = 160, n123 = 80,
+  category = c("PTSD", "Anxiety disorder", "Depression"),
+  fill = c("#E41A1C", "#377EB8", "#4DAF4A"),
+  alpha = 0.5
+)
+```
+
+---
+
+## Radar / spider charts
+
+The `fmsb` package draws radar charts from a data frame where the first row is the maximum value per axis and the second row is the minimum.
+
+```{r}
+#| eval: false
+library(fmsb)
+
+# Build the data frame
+scores <- as.data.frame(matrix(
+  sample(2:20, 10, replace = TRUE), ncol = 10
+))
+colnames(scores) <- c("math", "biology", "music", "R", "stats",
+                      "french", "physics", "english", "coding", "sport")
+
+# Add max and min rows
+scores <- rbind(rep(20, 10), rep(0, 10), scores)
+
+# Default radar chart
+radarchart(scores)
+
+# Customised version
+radarchart(
+  scores,
+  axistype  = 1,
+  pcol      = rgb(0.2, 0.5, 0.5, 0.9),  # polygon colour
+  pfcol     = rgb(0.2, 0.5, 0.5, 0.5),  # fill colour
+  plwd      = 3,
+  cglcol    = "grey", cglty = 1,
+  axislabcol = "grey", caxislabels = seq(0, 20, 5),
+  vlcex     = 0.8
+)
+```
+
+---
+
+## Clinical bar plots with custom labels
+
+A pattern that comes up often in clinical papers: side-by-side or stacked bars with percentage labels.
+
+```{r}
+#| eval: false
+# Example: LVEF distribution in a cardiac cohort
+data_lvef <- data.frame(
+  group      = c("LVEF < 30%", "LVEF 30–50%", "LVEF > 50%"),
+  percentage = c(35, 42, 23)
+)
+
+ggplot(data_lvef, aes(x = group, y = percentage, fill = group)) +
+  geom_col(width = 0.5, color = "black") +
+  coord_cartesian(ylim = c(0, 100)) +
+  labs(x = "", y = "Percentage (%)") +
+  theme_bw() +
+  theme(legend.position = "none")
+```

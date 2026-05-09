@@ -1,0 +1,19 @@
+{
+  "hash": "45db7a5eed5dfff39bb075099b6d4145",
+  "result": {
+    "engine": "knitr",
+    "markdown": "# Preface {.unnumbered}\n\nThis book is a personal reference guide to R for clinical data science, written and maintained by Thibault Dupont. It consolidates notes from various courses, workshops, and hands-on projects — covering R fundamentals, data wrangling, visualization, statistics, and machine learning — with a focus on applications relevant to clinical research and intensive care medicine.\n\nThe book is structured to be read linearly for a first pass, or used as a reference when you need to look up a specific technique. Each chapter includes explanatory text, annotated code, and practical examples.\n\n**How to use this book**\n\n- **New to R?** Start at Chapter 1 and read through Chapter 5.\n- **Refreshing data wrangling?** Jump to Chapter 4 (dplyr) and Chapter 6 (ggplot2).\n- **Working on a clinical study?** Chapters 7–10 cover the stats you will use most: descriptive tables, regression, survival analysis, and contingency tables.\n- **Building a dashboard or app?** Chapter 14 covers Shiny.\n\n**Technical setup**\n\nAll code in this book runs with R ≥ 4.2. Package dependencies are loaded at the top of each chapter. The tidyverse meta-package covers most of what is needed.\n\n\n::: {.cell}\n\n```{.r .cell-code}\ninstall.packages(\"tidyverse\")\n```\n:::\n\n",
+    "supporting": [],
+    "filters": [
+      "rmarkdown/pagebreak.lua"
+    ],
+    "includes": {
+      "include-in-header": [
+        "<link href=\"site_libs/pagedtable-1.1/css/pagedtable.css\" rel=\"stylesheet\" />\n<script src=\"site_libs/pagedtable-1.1/js/pagedtable.js\"></script>\n"
+      ]
+    },
+    "engineDependencies": {},
+    "preserve": {},
+    "postProcess": true
+  }
+}

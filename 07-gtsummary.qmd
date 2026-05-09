@@ -1,0 +1,190 @@
+# Descriptive Tables with gtsummary
+
+```{r}
+#| include: false
+#| eval: true
+library(gtsummary)
+library(dplyr)
+library(gapminder)
+```
+
+`gtsummary` produces publication-ready summary tables with a concise, pipe-friendly API. It handles continuous variables, categorical variables, grouped comparisons, and p-values automatically.
+
+---
+
+## The core function: `tbl_summary()`
+
+`tbl_summary()` takes a data frame and returns a formatted summary table. By default it detects variable types and applies sensible statistics.
+
+```{r}
+#| eval: true
+#| message: false
+gapminder |>
+  select(continent, pop, gdpPercap, lifeExp) |>
+  tbl_summary(by = continent) |>
+  add_n() |>
+  add_p() |>
+  bold_labels() |>
+  modify_header(label = "**Variable**")
+```
+
+---
+
+## Customising statistics
+
+Use `statistic` to control what is shown for each variable type:
+
+```{r}
+#| eval: false
+tbl_summary(
+  data      = base,
+  by        = PTSD_CLUSTER_STATUS,
+  missing   = "no",
+  statistic = list(
+    all_continuous()  ~ "{mean} ({sd})",        # mean ± SD
+    all_categorical() ~ "{n} / {N} ({p}%)"      # n / N (%)
+  ),
+  digits = all_continuous() ~ 2
+)
+```
+
+Alternative statistics strings:
+
+| String | Meaning |
+|---|---|
+| `"{median} ({p25}, {p75})"` | Median (IQR) |
+| `"{mean} ({sd})"` | Mean ± SD |
+| `"{n} ({p}%)"` | Count (%) |
+| `"{min}, {max}"` | Range |
+
+You can target specific variables by name:
+
+```{r}
+#| eval: false
+statistic = list(
+  age    ~ "{median} ({p25}, {p75})",
+  weight ~ "{mean} ({sd})",
+  group  ~ "{n} ({p}%)"
+)
+```
+
+---
+
+## Custom labels
+
+```{r}
+#| eval: false
+tbl_summary(
+  data  = base,
+  label = list(
+    AGE_PA         = "Patient's age (years)",
+    IGSII          = "IGS-II score",
+    SCORE_CHARLSON = "Charlson comorbidity index"
+  )
+)
+```
+
+---
+
+## Adding information with `add_*()`
+
+| Function | What it adds |
+|---|---|
+| `add_n()` | Column with total non-missing values |
+| `add_p()` | P-values for group comparisons |
+| `add_overall()` | An "Overall" column |
+| `add_difference()` | Difference between groups with CI |
+| `add_q()` | Q-values (adjusted p-values) |
+
+```{r}
+#| eval: false
+base |>
+  tbl_summary(by = group) |>
+  add_n()        |>
+  add_p()        |>
+  add_overall()  |>
+  add_difference()
+```
+
+---
+
+## Formatting the table
+
+```{r}
+#| eval: false
+tbl |>
+  modify_header(label = "**Variable**") |>
+  modify_caption("**Table 1. Patient characteristics**") |>
+  bold_labels() |>
+  italicize_levels()
+```
+
+---
+
+## Full clinical Table 1 example
+
+This is a complete, annotated Table 1 template as used in a clinical paper.
+
+```{r}
+#| eval: false
+library(gtsummary)
+library(dplyr)
+
+table1 <- base |>
+  # Recode factor scores as numeric where needed
+  mutate(
+    across(c(QUALITE_COM_EQUIPE, AISE_EXPRIM_RESSENTI, IMPLICATION_DEC_MED,
+             ENTOURAGE, EXCLUSION_SOCIALE, STRESS_FIN), as.numeric)
+  ) |>
+  tbl_summary(
+    by        = PTSD_CLUSTER_STATUS,
+    missing   = "no",
+    statistic = list(
+      all_continuous()  ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} / {N} ({p}%)"
+    ),
+    digits = all_continuous() ~ 2,
+    label  = list(
+      AGE_PA         = "Patient's age (years)",
+      IGSII          = "IGS-II severity score",
+      SCORE_CHARLSON = "Charlson comorbidity index"
+    )
+  ) |>
+  add_n()          |>   # non-missing N per variable
+  add_p()          |>   # between-group p-value
+  add_overall()    |>   # total column
+  add_difference() |>   # difference with 95% CI
+  modify_header(label = "**Variable**") |>
+  modify_caption("**Table 1: Patient characteristics by PTSD cluster status**") |>
+  bold_labels()
+
+table1
+```
+
+---
+
+## Regression tables with `tbl_regression()`
+
+`gtsummary` can also format model output into publication-ready regression tables.
+
+```{r}
+#| eval: false
+library(gtsummary)
+
+model <- glm(ICU_mortality ~ age + SOFA + mv + vasopressors,
+             data = icu_data, family = "binomial")
+
+tbl_regression(
+  model,
+  exponentiate = TRUE,   # report OR instead of log-odds
+  label = list(
+    age          = "Age (years)",
+    SOFA         = "SOFA score",
+    mv           = "Mechanical ventilation",
+    vasopressors = "Vasopressors"
+  )
+) |>
+  add_global_p() |>
+  bold_p() |>
+  bold_labels()
+```
